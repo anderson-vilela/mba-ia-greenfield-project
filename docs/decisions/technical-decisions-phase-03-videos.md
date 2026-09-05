@@ -1,7 +1,7 @@
 ---
 scope_type: phase
 related_phases: [3]
-status: pending
+status: decided
 date: 2026-09-05
 scope_description: "Backend foundation for large video uploads and background processing: queue technology, 10GB upload strategy, object storage layout, video worker packaging, FFmpeg toolchain, unique video URL, streaming/download delivery, status lifecycle on processing failure, and test isolation for the new infrastructure."
 ---
@@ -47,7 +47,8 @@ _Subprojects in scope:_
 
 **Recommendation:** **Option A (BullMQ + Redis/Valkey via `@nestjs/bullmq`)** — it is the only option that combines a first-party NestJS integration with retry/backoff/DLQ semantics the phase needs (TD-11), and it makes the queue an explicit Compose service, which the phase's deliverables call for. Option B is the same library without the extra container, but a five-week-old backend reached through an undocumented `setDefaultBackendFactory` escape hatch is the wrong place to spend risk in a phase this large; it becomes the natural migration target once BullMQ 6's Postgres backend matures. The lost transactional coupling between job and `videos` row is handled by the idempotent status transitions in TD-11, not by the queue.
 
-**Decision:** _[pending]_
+**Decision:** A — Redis-compatible backend container is `valkey/valkey` (BSD), not `redis:8` (AGPLv3): BullMQ runs its full test suite against Valkey, and the permissive license avoids re-opening this decision later.
+**Libraries:** bullmq, @nestjs/bullmq
 
 ---
 
@@ -78,7 +79,8 @@ _Subprojects in scope:_
 
 **Recommendation:** **Option A (multipart + per-part presigned URLs)** — it is the only option where the API's work is O(1) per upload regardless of file size, which is what "sem impacto na performance" means in practice, and it is the shape the C4 diagram already draws (`frontend → storage`). Option C is disqualified by the phase's own failure criteria (passing the 10GB file through the API); Option B moves the bytes back through the API to buy resumability that per-part retry already approximates. Orphaned multipart uploads are handled by an abort/expiry sweep defined with the status lifecycle in TD-11.
 
-**Decision:** _[pending]_
+**Decision:** A
+**Libraries:** @aws-sdk/client-s3, @aws-sdk/s3-request-presigner
 
 ---
 
@@ -109,7 +111,7 @@ _Subprojects in scope:_
 
 **Recommendation:** **Option A, with a scheduled sweep borrowed from Option C for abandoned uploads** — the explicit endpoint keeps the transition inside an authenticated request where ownership, limits and the enqueue can be verified and tested end-to-end with supertest, while the sweep (abort multipart uploads older than the upload TTL, mark the draft failed) closes the only hole it leaves. Option B is deferred: it buys robustness that matters when third parties write to the bucket, which is not the case here, at the cost of storage-side configuration that would have to be reproduced in every test environment.
 
-**Decision:** _[pending]_
+**Decision:** A — endpoint explícito de conclusão do upload, com varredura periódica (sweep) para abortar uploads multipart abandonados e marcar o rascunho como failed.
 
 ---
 
@@ -140,7 +142,7 @@ _Subprojects in scope:_
 
 **Recommendation:** **Option A (pinned MinIO)** — the phase's risk budget belongs in the queue and the upload handshake, not in re-validating multipart/presigned/CORS semantics against a release candidate. Pinning the last published tag keeps the environment reproducible today, and because everything above the container is plain S3 API through `@aws-sdk/client-s3`, swapping to RustFS (or to real S3) later is a Compose-level change plus an endpoint env var. Record the frozen-image caveat in the phase's `library-refs.md` so the constraint is not rediscovered later.
 
-**Decision:** _[pending]_
+**Decision:** A — `minio/minio:RELEASE.2025-09-07T16-13-09Z` pinado; imagem congelada, sem patches — anotado em `library-refs.md`.
 
 ---
 
@@ -171,7 +173,7 @@ _Subprojects in scope:_
 
 **Recommendation:** **Option B (separate buckets by content type)** — the access profiles genuinely differ, and paying for that split now avoids either signing a URL per thumbnail in every future grid or making video sources public. Keys stay `{videoId}/…` in both buckets, so deletion and reconciliation are prefix operations. Option C's raw/processed split earns its cost only when transcoding exists, which this phase explicitly does not include.
 
-**Decision:** _[pending]_
+**Decision:** B
 
 ---
 
@@ -202,7 +204,7 @@ _Subprojects in scope:_
 
 **Recommendation:** **Option A (same codebase, separate container, standalone context)** — it satisfies the architectural requirement (worker isolated from the API, visible in Compose, independently scalable) at the cost of one Dockerfile target, while keeping entities and config shared by plain imports so the single Definition of Done pipeline still covers everything. Option B's package boundary is real but buys isolation the project cannot yet pay for in tooling; Option C contradicts the phase's own performance goal.
 
-**Decision:** _[pending]_
+**Decision:** A
 
 ---
 
@@ -233,7 +235,7 @@ _Subprojects in scope:_
 
 **Recommendation:** **Option A (`spawn` on system FFmpeg)** — with `fluent-ffmpeg` archived and the static-binary probe packages abandoned, the only maintained path is the OS package plus two well-understood command invocations, which is also what the wrapper did underneath. Concretely: `ffprobe` JSON output for duration/codec/resolution, and a single frame at a fixed fraction of the duration (≈10%, avoiding black leader frames) scaled to a 1280×720 JPEG. Arguments are built exclusively from server-side values (storage paths and computed timestamps), never from client input.
 
-**Decision:** _[pending]_
+**Decision:** A
 
 ---
 
@@ -264,7 +266,7 @@ _Subprojects in scope:_
 
 **Recommendation:** **Option B (dedicated `public_id`, 11-char base64url from `node:crypto`)** — the capability asks for a short URL that never conflicts, and a random id in its own uniquely-indexed column gives exactly that while staying immutable across the Phase 04 title edits that would invalidate Option C. Using `node:crypto` instead of a generator package keeps the CommonJS build clean and adds nothing to the dependency surface; the UUID PK stays internal, unchanged.
 
-**Decision:** _[pending]_
+**Decision:** B
 
 ---
 
@@ -295,7 +297,7 @@ _Subprojects in scope:_
 
 **Recommendation:** **Option A (redirect to a short-lived presigned GET)** — it delivers seekable streaming with correct `206` semantics for free, keeps the API out of the byte path, and is exactly the relationship the C4 diagram already models. The shareable-URL window is bounded by a short expiry (minutes) configured as an env var, and the authorization check at the signing endpoint is where Phase 05's unlisted/anonymous rules will attach. Option B remains the fallback if a later phase needs per-byte control; Option C is out of scope.
 
-**Decision:** _[pending]_
+**Decision:** A
 
 ---
 
@@ -326,7 +328,7 @@ _Subprojects in scope:_
 
 **Recommendation:** **Option A (presigned GET with `response-content-disposition`)** — it keeps a single storage-access strategy across streaming and download while still giving the download its own authorized endpoint, its own TTL and a filename derived from the video title. Option B reintroduces the byte-path problem the phase is built to avoid; Option C gives up the filename and the ability to ever count downloads separately.
 
-**Decision:** _[pending]_
+**Decision:** A
 
 ---
 
@@ -357,7 +359,7 @@ _Subprojects in scope:_
 
 **Recommendation:** **Option A (single enum + `failure_reason`, retries owned by the queue)** — it gives the management panel and the delivery endpoints one unambiguous field to read, and it puts the transient/permanent distinction where it belongs: transient failures are absorbed by bounded queue retries (3 attempts, exponential backoff) while the row stays `processing`; the row becomes `failed` only when the job is exhausted or the file is definitively unusable, with the reason recorded. Every transition is written as a guarded, idempotent update so a redelivered job cannot regress a `ready` video. The abandoned-upload sweep from TD-03 uses the same terminal `failed` state.
 
-**Decision:** _[pending]_
+**Decision:** A
 
 ---
 
@@ -388,7 +390,7 @@ _Subprojects in scope:_
 
 **Recommendation:** **Option A (declare-then-verify)** — it is the only option compatible with the multipart handshake that still rejects obviously invalid uploads before the transfer, and its verification step reuses artifacts the pipeline already produces. Concretely: max size, accepted MIME types, multipart part size, presigned-URL TTL and abandoned-upload TTL become env vars validated by the existing Joi schema (`src/config/env.validation.ts`) and surfaced through a namespaced config, so API, worker and Compose read the same numbers. Mismatch between declared and actual is a `failed` video per TD-11, not a silent pass.
 
-**Decision:** _[pending]_
+**Decision:** A
 
 ---
 
@@ -419,7 +421,7 @@ _Subprojects in scope:_
 
 **Recommendation:** **Option A (dedicated test namespaces on the shared Compose services)** — it extends the pattern the project already uses for the database and Mailpit, needs nothing beyond env vars and a setup/teardown helper, and keeps every command inside the container as `nestjs-project/CLAUDE.md` requires. Option C's shared queue is the specific failure mode worth spending setup code to avoid: a dev worker silently eating a test job. Option B's isolation is stronger but would require docker-in-docker, which the project's execution model rules out.
 
-**Decision:** _[pending]_
+**Decision:** A
 
 ---
 
@@ -427,16 +429,16 @@ _Subprojects in scope:_
 
 | ID | Scope | Decision | Recommendation | Choice |
 |----|-------|----------|---------------|--------|
-| TD-01 | Backend | Background processing queue technology | A — BullMQ + Redis/Valkey via `@nestjs/bullmq` | _[pending]_ |
-| TD-02 | Backend | 10GB upload strategy | A — S3 multipart with per-part presigned URLs | _[pending]_ |
-| TD-03 | Backend | Upload completion contract & processing trigger | A — Explicit completion endpoint + abandoned-upload sweep | _[pending]_ |
-| TD-04 | Backend | Local S3-compatible storage image | A — Pinned `minio/minio:RELEASE.2025-09-07T16-13-09Z` | _[pending]_ |
-| TD-05 | Backend | Bucket & key organization | B — Separate buckets by content type | _[pending]_ |
-| TD-06 | Backend | Video worker packaging & runtime | A — Same codebase, separate container, standalone Nest context | _[pending]_ |
-| TD-07 | Backend | Media toolchain (metadata + thumbnail) | A — `child_process.spawn` on system FFmpeg/ffprobe | _[pending]_ |
-| TD-08 | Backend | Unique video URL identifier | B — Dedicated `public_id`, 11-char base64url from `node:crypto` | _[pending]_ |
-| TD-09 | Backend | Streaming delivery strategy | A — Redirect to short-lived presigned GET | _[pending]_ |
-| TD-10 | Backend | Video download delivery | A — Presigned GET with `response-content-disposition` | _[pending]_ |
-| TD-11 | Backend | Status lifecycle & processing failure policy | A — Single enum + `failure_reason`, retries owned by the queue | _[pending]_ |
-| TD-12 | Backend | Upload validation & limits policy | A — Declare-then-verify | _[pending]_ |
-| TD-13 | Backend | Test isolation for storage & queue | A — Dedicated test namespaces on shared Compose services | _[pending]_ |
+| TD-01 | Backend | Background processing queue technology | A — BullMQ + Redis/Valkey via `@nestjs/bullmq` | **A (BullMQ + Valkey via `@nestjs/bullmq`)** |
+| TD-02 | Backend | 10GB upload strategy | A — S3 multipart with per-part presigned URLs | **A (S3 multipart + per-part presigned URLs)** |
+| TD-03 | Backend | Upload completion contract & processing trigger | A — Explicit completion endpoint + abandoned-upload sweep | **A (Explicit completion endpoint + abandoned-upload sweep)** |
+| TD-04 | Backend | Local S3-compatible storage image | A — Pinned `minio/minio:RELEASE.2025-09-07T16-13-09Z` | **A (Pinned `minio/minio:RELEASE.2025-09-07T16-13-09Z`)** |
+| TD-05 | Backend | Bucket & key organization | B — Separate buckets by content type | **B (Separate buckets by content type)** |
+| TD-06 | Backend | Video worker packaging & runtime | A — Same codebase, separate container, standalone Nest context | **A (Same codebase, separate container, standalone Nest context)** |
+| TD-07 | Backend | Media toolchain (metadata + thumbnail) | A — `child_process.spawn` on system FFmpeg/ffprobe | **A (`child_process.spawn` on system FFmpeg/ffprobe)** |
+| TD-08 | Backend | Unique video URL identifier | B — Dedicated `public_id`, 11-char base64url from `node:crypto` | **B (Dedicated `public_id` via `node:crypto`)** |
+| TD-09 | Backend | Streaming delivery strategy | A — Redirect to short-lived presigned GET | **A (Redirect to short-lived presigned GET)** |
+| TD-10 | Backend | Video download delivery | A — Presigned GET with `response-content-disposition` | **A (Presigned GET with `response-content-disposition`)** |
+| TD-11 | Backend | Status lifecycle & processing failure policy | A — Single enum + `failure_reason`, retries owned by the queue | **A (Single enum + `failure_reason`)** |
+| TD-12 | Backend | Upload validation & limits policy | A — Declare-then-verify | **A (Declare-then-verify)** |
+| TD-13 | Backend | Test isolation for storage & queue | A — Dedicated test namespaces on shared Compose services | **A (Dedicated test namespaces on shared Compose services)** |
