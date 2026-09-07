@@ -21,10 +21,10 @@ See `docs/diagrams/software-arch.mermaid` for the full diagram. Key containers:
 - **Frontend** (Next.js) → calls API via REST, streams from Object Storage
 - **API** (Nest.js) → business rules, auth, reads/writes DB, uploads to storage, publishes jobs to queue, sends emails
 - **Video Worker** (FFmpeg) → consumes jobs from queue, processes videos, updates DB and storage
-- **Database** (PostgreSQL) → users, channels, videos, comments, likes
-- **Object Storage** (S3/MinIO) → video files and thumbnails
-- **Message Queue** (TBD) → video processing job queue
-- **Email Service** (SMTP) → account confirmation and password recovery
+- **Database** (PostgreSQL 17) → users, channels, videos, comments, likes
+- **Object Storage** (S3-compatible / MinIO in dev, AWS S3 in prod) → video files and thumbnails
+- **Message Queue** (Valkey / Redis + BullMQ) → video processing and upload sweep job queues
+- **Email Service** (SMTP / Mailpit in dev) → account confirmation and password recovery
 
 ## Docker Networking
 
@@ -105,3 +105,10 @@ Skip documentation lookup only for trivial operations such as:
 
 If a library is involved and there is uncertainty, documentation lookup is mandatory.
 If the documentation returned does not match the installed version, flag the discrepancy before proceeding.
+
+## Phase 03: Video Management & Processing
+
+- **Upload Strategy:** Direct S3 multipart upload via presigned URLs up to 10GB. The API coordinates uploads without buffering video bytes.
+- **Worker & Processing:** Standalone process (`video-worker`) consuming the BullMQ `video-processing` queue backed by Valkey. Uses `ffprobe` for metadata and `ffmpeg` for thumbnail generation at 10% duration.
+- **Unique URL:** 11-character base64url random unique `public_id` per video.
+- **Delivery:** Streaming (`GET /videos/:id/stream`) and download (`GET /videos/:id/download`) via HTTP 302 redirect to short-lived S3 presigned URLs.

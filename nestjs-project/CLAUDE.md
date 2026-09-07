@@ -34,6 +34,11 @@ docker compose exec nestjs-api npm run start:dev
 Services:
 - `nestjs-api` — NestJS API, port `3000`
 - `db` — PostgreSQL 17, port `5432`, database `streamtube`, user/password `streamtube`
+- `mailpit` — Mailpit SMTP server, port `1025`, web UI port `8025`
+- `storage` — MinIO object storage (S3 compatible), API port `9000`, console port `9001`
+- `storage-init` — One-shot MinIO client to create `streamtube-videos` and `streamtube-thumbnails` buckets
+- `valkey` — Valkey 8 in-memory store for BullMQ queues, port `6379`
+- `video-worker` — Standalone worker process running FFmpeg/ffprobe to process video jobs
 
 All verification and teardown commands run on the **host machine**:
 
@@ -47,6 +52,7 @@ docker compose exec db pg_isready -U streamtube
 # Check container logs
 docker compose logs nestjs-api
 docker compose logs db
+docker compose logs video-worker
 
 # Tear down the entire environment
 docker compose down
@@ -60,6 +66,7 @@ docker compose down
 
 ```bash
 npm run start:dev                        # Dev server with hot-reload
+npm run start:worker                     # Standalone video worker (runs in video-worker container)
 npm run build                            # Compile to dist/
 npm run start:prod                       # Run compiled build
 
@@ -159,3 +166,19 @@ NestJS with standard module structure. Source lives in `src/`, compiled output i
 ## REST Conventions
 
 This is a RESTful API. All endpoints must follow standard REST conventions — correct HTTP methods, proper status codes, plural resource nouns, and consistent URL structure. Details are enforced via rules on controller files.
+
+## Videos Module (Phase 03)
+
+The videos domain handles high-volume media upload, background processing, streaming, and downloads.
+
+### Key Endpoints (`/videos`)
+- `POST /videos`: Initiates a direct multipart upload. Creates a `draft` video record and returns S3 presigned URLs for upload parts.
+- `POST /videos/:id/complete-upload`: Completes multipart upload on storage, marks video as `processing`, and enqueues job in `video-processing`.
+- `GET /videos/:id/stream`: Returns HTTP 302 Found redirecting to a presigned S3 URL for streaming. Supports HTTP range requests directly via S3/MinIO.
+- `GET /videos/:id/download`: Returns HTTP 302 Found redirecting to a presigned S3 download URL with `Content-Disposition: attachment`.
+
+### Background Worker & Queues
+- **Fila `video-processing`:** Consumed by `VideoProcessor` in the standalone `video-worker` container (`npm run start:worker`). Uses `ffprobe` to extract duration/metadata and `ffmpeg` to extract a thumbnail frame at 10% duration. On success, transitions video to `ready`. On failure, marks video as `failed` with `failure_reason`.
+- **Fila `sweep-abandoned-uploads`:** `AbandonedUploadSweepScheduler` (provider of `VideosModule`, so it runs in the API process) registers the repeatable job; `AbandonedUploadSweepProcessor` (provider of `WorkerModule`, so it runs in the `video-worker` container) consumes it, aborting expired draft multipart uploads and marking them as `failed`.
+
+Queue consumers (`@Processor` classes extending `WorkerHost`) must be registered as `providers` of `WorkerModule` — never of `VideosModule`. A consumer registered in `VideosModule` would turn the API process into a BullMQ worker, defeating the isolation of the `video-worker` container; a consumer registered nowhere is silently never invoked (`worker.module.integration-spec.ts` guards against this).
