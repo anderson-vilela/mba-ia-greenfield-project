@@ -1,10 +1,10 @@
 ---
 kind: phase
-name: phase-03-phase-03-videos
+name: phase-03-videos
 test_specs_aware: true
 sources_mtime:
-  docs/phases/phase-03-phase-03-videos/context.md: "2026-09-05T19:01:34-03:00"
-  docs/phases/phase-03-phase-03-videos/library-refs.md: "2026-09-05T19:01:53-03:00"
+  docs/phases/phase-03-videos/context.md: "2026-09-05T19:01:34-03:00"
+  docs/phases/phase-03-videos/library-refs.md: "2026-09-05T19:01:53-03:00"
   docs/decisions/technical-decisions-phase-03-videos.md: "2026-09-05T18:59:28-03:00"
 ---
 
@@ -384,7 +384,7 @@ Entregar o backend de upload e processamento de vídeos da StreamTube: upload mu
 
 ### API Contracts
 
-#### POST /videos (SI-NN.X)
+#### POST /videos (SI-03.6)
 
 **Request headers:**
 - Content-Type: application/json
@@ -408,7 +408,7 @@ Entregar o backend de upload e processamento de vídeos da StreamTube: upload mu
 
 ---
 
-#### POST /videos/:id/complete-upload (SI-NN.X)
+#### POST /videos/:id/complete-upload (SI-03.7)
 
 **Request headers:**
 - Content-Type: application/json
@@ -429,7 +429,7 @@ Entregar o backend de upload e processamento de vídeos da StreamTube: upload mu
 
 ---
 
-#### GET /videos/:id/stream (SI-NN.X)
+#### GET /videos/:id/stream (SI-03.11)
 
 **Response 302:** redirect (`Location`) para uma presigned GET URL do bucket de vídeos, TTL curto configurável (phase-03-videos/TD-09, TD-12); o player consome a URL diretamente do storage, que responde `206 Partial Content` a requisições com `Range` — a API fica fora do caminho dos bytes.
 
@@ -439,7 +439,7 @@ Entregar o backend de upload e processamento de vídeos da StreamTube: upload mu
 
 ---
 
-#### GET /videos/:id/download (SI-NN.X)
+#### GET /videos/:id/download (SI-03.12)
 
 **Response 302:** redirect (`Location`) para uma presigned GET URL do bucket de vídeos com `response-content-disposition=attachment; filename="{title}"`, TTL próprio e independente do TTL de streaming (phase-03-videos/TD-10, TD-12).
 
@@ -543,22 +543,22 @@ Ordem linearizada: SI-03.1 → SI-03.2, SI-03.3, SI-03.4, SI-03.5 (paralelo) →
 
 ## Deliverables
 
-- [ ] SI-03.1 — Infra: serviços de storage e fila no Compose + configuração namespaced
-- [ ] SI-03.2 — Infra: isolamento de testes para storage e fila
-- [ ] SI-03.3 — Entidade `Video` e migration
-- [ ] SI-03.4 — `QueueModule`: fila `video-processing`
-- [ ] SI-03.5 — `StorageService`: cliente S3 (multipart + presigned URLs)
-- [ ] SI-03.6 — Endpoint POST /videos (iniciar upload)
-- [ ] SI-03.7 — Endpoint POST /videos/:id/complete-upload
-- [ ] SI-03.8 — Sweep de uploads abandonados
-- [ ] SI-03.9 — Video worker: bootstrap standalone
-- [ ] SI-03.10 — `VideoProcessor`: metadados e thumbnail via ffmpeg/ffprobe
-- [ ] SI-03.11 — Endpoint GET /videos/:id/stream
-- [ ] SI-03.12 — Endpoint GET /videos/:id/download
+- [x] SI-03.1 — Infra: serviços de storage e fila no Compose + configuração namespaced
+- [x] SI-03.2 — Infra: isolamento de testes para storage e fila
+- [x] SI-03.3 — Entidade `Video` e migration
+- [x] SI-03.4 — `QueueModule`: fila `video-processing`
+- [x] SI-03.5 — `StorageService`: cliente S3 (multipart + presigned URLs)
+- [x] SI-03.6 — Endpoint POST /videos (iniciar upload)
+- [x] SI-03.7 — Endpoint POST /videos/:id/complete-upload
+- [x] SI-03.8 — Sweep de uploads abandonados
+- [x] SI-03.9 — Video worker: bootstrap standalone
+- [x] SI-03.10 — `VideoProcessor`: metadados e thumbnail via ffmpeg/ffprobe
+- [x] SI-03.11 — Endpoint GET /videos/:id/stream
+- [x] SI-03.12 — Endpoint GET /videos/:id/download
 
 **Full test suites:**
 
-- [ ] Testes unitários e de integração passam (`docker compose exec nestjs-api npm test -- --runInBand`)
-- [ ] Testes E2E passam (`docker compose exec nestjs-api npm run test:e2e`)
-- [ ] Type-check passa (`docker compose exec nestjs-api npx tsc --noEmit`)
-- [ ] Lint passa (`docker compose exec nestjs-api npm run lint`)
+- [x] Testes unitários e de integração passam (`docker compose exec nestjs-api npm test -- --runInBand`)
+- [x] Testes E2E passam (`docker compose exec nestjs-api npm run test:e2e`)
+- [x] Type-check passa (`docker compose exec nestjs-api npx tsc --noEmit`)
+- [x] Lint passa (`docker compose exec nestjs-api npm run lint`)

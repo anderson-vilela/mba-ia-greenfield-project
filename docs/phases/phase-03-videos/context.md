@@ -1,6 +1,6 @@
 ---
 kind: phase
-name: phase-03-phase-03-videos
+name: phase-03-videos
 sources_mtime:
   docs/project-plan.md: "2026-09-05T11:46:56-03:00"
   docs/decisions/technical-decisions-phase-03-videos.md: "2026-09-05T18:59:28-03:00"
@@ -11,7 +11,7 @@ sources_mtime:
   .claude/skills/testing-guide-nestjs-project/SKILL.md: "2026-09-05T11:46:56-03:00"
 ---
 
-# phase-03-phase-03-videos — Context
+# phase-03-videos — Context
 
 ## Scope
 

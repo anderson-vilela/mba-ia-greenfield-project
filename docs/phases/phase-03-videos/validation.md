@@ -1,11 +1,12 @@
 ---
 kind: phase
-name: phase-03-phase-03-videos
+name: phase-03-videos
 status: clean
 issue_count: 0
-sources_mtime:
-  docs/phases/phase-03-phase-03-videos/context.md: "2026-09-05T19:01:34-03:00"
-  docs/decisions/technical-decisions-phase-03-videos.md: "2026-09-05T18:59:28-03:00"
+decision_doc: docs/decisions/technical-decisions-phase-03-videos.md
+sources:
+  docs/decisions/technical-decisions-phase-03-videos.md: "2026-09-05T18:59:16-03:00"
+  docs/phases/phase-03-videos/context.md: "2026-09-05T19:01:34-03:00"
 issues:
   - id: OQ-1
     status: resolved
@@ -61,7 +62,7 @@ issues:
     resolved_by: phase-03-videos/TD-13
 ---
 
-# phase-03-phase-03-videos — Validation
+# phase-03-videos — Validation
 
 ## Findings
 
