@@ -159,7 +159,13 @@ As duas rotas públicas passaram a resolver por `public_id` (`findOneBy({ public
 
 O `VideoProcessor` persiste apenas `duration_seconds`: é o único campo de metadado que o Data Model declara, e a TD-07 escolheu o toolchain (`ffprobe`/`ffmpeg` via `child_process`) sem prometer resolução, codec ou bitrate. Registrado aqui porque o enunciado fala em "duração/metadados": a extração dos demais atributos exigiria colunas novas, migration e processor fora do plano validado em `clean`, então fica para uma fase posterior em vez de ser somada a esta fora de escopo.
 
-### 6. Placeholders no plano
+### 6. Path traversal na chave de storage
+
+O Data Model fixa `original_key` como `{id}/{filename}`, mas o `filename` chegava do cliente sem nenhuma validação de path — e é essa chave que as presigned URLs de multipart upload autorizam para escrita. Um `filename` como `../../thumbnails/{outro-uuid}/thumbnail.jpg` escapava do prefixo do próprio vídeo, permitindo sobrescrever a thumbnail de outro vídeo com uma URL legitimamente assinada pela API, e quebrando a premissa da TD-05 de que exclusão e reconciliação são operações por prefixo.
+
+Corrigido na entrada, em `CreateVideoDto`: o `filename` rejeita separadores de path, `..`, aspas e caracteres de controle. Isso mantém o padrão `{id}/{filename}` do Data Model (nenhum contrato ou migration muda) e de quebra protege o `Content-Disposition` do download, montado a partir do título. Três cenários e2e cobrem as variações.
+
+### 7. Placeholders no plano
 
 Os cabeçalhos de API Contracts em `phase-03-videos.md` traziam o literal `(SI-NN.X)` do template do `/plan-build`; substituídos pelas SIs reais (03.6, 03.7, 03.11, 03.12).
 
@@ -170,6 +176,6 @@ Medida em ciclos consecutivos de `npm test` → `npm run test:e2e` **sem restaur
 | Verificação | Resultado |
 |---|---|
 | `npm test -- --runInBand` (unit + integração) | 37 suites, 210 testes passando |
-| `npm run test:e2e` | 4 suites, 73 testes passando |
+| `npm run test:e2e` | 4 suites, 76 testes passando |
 | `npx tsc --noEmit` | exit 0 |
 | `npm run lint` | exit 0 (0 errors, 26 warnings `no-unsafe-argument` pré-existentes) |
