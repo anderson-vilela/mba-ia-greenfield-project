@@ -139,19 +139,33 @@ Regressão coberta por `src/worker/worker.module.integration-spec.ts`, que agora
 
 Os 4 cenários de `specs/videos.plan.md` (que a SI-03.7 registrou como não implementados, por o spec ter sido gerado depois da SI-03.6) foram adicionados como `describe('POST /videos', ...)` em `test/videos.e2e-spec.ts`: resposta 201 com `public_id` de 11 caracteres base64url e uma URL pré-assinada por parte (exercitando o cálculo de partes com um arquivo de 150 MB, ou seja, 2 partes), 413 `UPLOAD_FILE_TOO_LARGE` acima de 10 GB, 415 `UNSUPPORTED_MEDIA_TYPE` e 401 sem token.
 
-### 3. Deadlock intermitente em `migrations.integration-spec.ts`
+### 3. `migrations.integration-spec.ts` envenenava o banco compartilhado
 
-O `beforeAll` dropava as tabelas com `Promise.all`; `DROP TABLE ... CASCADE` concorrentes sobre tabelas ligadas por FK adquirem locks em ordens diferentes e deadlockam no Postgres. A fase 03 agravou a corrida ao somar a FK `videos → channels` ao conjunto. Serializado o loop de drops.
+Dois defeitos no mesmo arquivo, ambos só visíveis na ordem canônica da Definition of Done (`npm test` e depois `npm run test:e2e`, contra o único banco compartilhado):
 
-### 4. Placeholders no plano
+1. **Deadlock intermitente.** O `beforeAll` dropava as tabelas com `Promise.all`; `DROP TABLE ... CASCADE` concorrentes sobre tabelas ligadas por FK adquirem locks em ordens diferentes e deadlockam no Postgres. A fase 03 agravou a corrida ao somar a FK `videos → channels` ao conjunto. Serializado o loop de drops.
+
+2. **Tabela `videos` dropada e nunca recriada.** O `beforeAll` dropava `videos`, mas o `DataSource` do teste declarava apenas `CreateUsersAndChannels` e `CreateAuthTokens` — sem `CreateVideos`. Como o `afterAll` restaura o schema chamando `runMigrations()` sobre essa mesma lista, a tabela ficava permanentemente ausente: todo `npm test` derrubava `videos` e o `npm run test:e2e` seguinte falhava com `relation "videos" does not exist` em 65 dos 72 testes. Isso violava a regra do projeto em `.claude/rules/typeorm-migrations.md` ("Migration Tests Must Restore DB State"). Corrigido extraindo `ALL_MIGRATIONS` com as três migrations e movendo `videos` para `MANAGED_TABLES`; os dois testes passaram a cobrir a migration da própria fase (aplicar as três e reverter a última, que agora é `CreateVideos`).
+
+Esse defeito é a razão de a fase ter sido dada como verde antes: uma execução isolada de `npm test` passa, e o e2e só quebra quando roda depois dela no mesmo banco.
+
+### 4. `public_id` era um campo órfão
+
+A TD-08 escolheu um `public_id` de 11 chars base64url como a URL pública do vídeo, registrando que "the UUID PK stays internal". O código gerava e persistia o `public_id` com índice único, mas `GET /videos/:id/stream` e `/download` resolviam o vídeo pelo uuid — ou seja, a URL pública anunciada pela decisão não existia, e o campo não era lido por nenhuma query.
+
+As duas rotas públicas passaram a resolver por `public_id` (`findOneBy({ public_id })`), com o path param renomeado para `:publicId`. Os endpoints autenticados de upload seguem no uuid, que o dono já recebe do `POST /videos`. Um e2e novo fixa a invariante da TD-08: o uuid interno em `/stream` responde 404. Plano (API Contracts) e `nestjs-project/CLAUDE.md` atualizados.
+
+### 5. Placeholders no plano
 
 Os cabeçalhos de API Contracts em `phase-03-videos.md` traziam o literal `(SI-NN.X)` do template do `/plan-build`; substituídos pelas SIs reais (03.6, 03.7, 03.11, 03.12).
 
 ### Definition of Done (verificada na stack completa do Compose)
 
+Medida em dois ciclos consecutivos de `npm test` → `npm run test:e2e` **sem restaurar o banco entre eles**, justamente o cenário que expunha o defeito 3:
+
 | Verificação | Resultado |
 |---|---|
 | `npm test -- --runInBand` (unit + integração) | 37 suites, 210 testes passando |
-| `npm run test:e2e` | 4 suites, 72 testes passando |
+| `npm run test:e2e` | 4 suites, 73 testes passando |
 | `npx tsc --noEmit` | exit 0 |
 | `npm run lint` | exit 0 (0 errors, 26 warnings `no-unsafe-argument` pré-existentes) |

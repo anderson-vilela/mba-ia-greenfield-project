@@ -292,8 +292,11 @@ describe('VideosService', () => {
         makeVideo({ status: 'ready', original_key: 'video-id/video.mp4' }),
       );
 
-      const url = await service.getStreamUrl('video-id');
+      const url = await service.getStreamUrl('aBcDeFgHiJk');
 
+      expect(videoRepository.findOneBy).toHaveBeenCalledWith({
+        public_id: 'aBcDeFgHiJk',
+      });
       expect(storageService.presignGetObject).toHaveBeenCalledWith(
         'streamtube-videos',
         'video-id/video.mp4',
@@ -338,8 +341,11 @@ describe('VideosService', () => {
         }),
       );
 
-      const url = await service.getDownloadUrl('video-id');
+      const url = await service.getDownloadUrl('aBcDeFgHiJk');
 
+      expect(videoRepository.findOneBy).toHaveBeenCalledWith({
+        public_id: 'aBcDeFgHiJk',
+      });
       expect(storageService.presignGetObject).toHaveBeenCalledWith(
         'streamtube-videos',
         'video-id/video.mp4',

@@ -6,13 +6,24 @@ import { VerificationToken } from '../auth/entities/verification-token.entity';
 import { Video } from '../videos/entities/video.entity';
 import { CreateUsersAndChannels1775687773260 } from './migrations/1775687773260-CreateUsersAndChannels';
 import { CreateAuthTokens1777579850478 } from './migrations/1777579850478-CreateAuthTokens';
+import { CreateVideos1788650405366 } from './migrations/1788650405366-CreateVideos';
 import { createTestDataSource } from '../test/create-test-data-source';
+
+// Every migration must be listed: afterAll re-applies this exact set, so one
+// missing here is a table this suite drops and never restores, breaking every
+// later suite in the run against the shared database.
+const ALL_MIGRATIONS = [
+  CreateUsersAndChannels1775687773260,
+  CreateAuthTokens1777579850478,
+  CreateVideos1788650405366,
+];
 
 const MANAGED_TABLES = [
   'users',
   'channels',
   'refresh_tokens',
   'verification_tokens',
+  'videos',
 ];
 
 describe('Database migrations (integration)', () => {
@@ -21,20 +32,14 @@ describe('Database migrations (integration)', () => {
   beforeAll(async () => {
     dataSource = createTestDataSource(
       [User, Channel, RefreshToken, VerificationToken, Video],
-      {
-        synchronize: false,
-        migrations: [
-          CreateUsersAndChannels1775687773260,
-          CreateAuthTokens1777579850478,
-        ],
-      },
+      { synchronize: false, migrations: ALL_MIGRATIONS },
     );
 
     await dataSource.initialize();
 
     // Sequential, not Promise.all: concurrent DROP ... CASCADE on tables linked
     // by foreign keys grab their locks in different orders and deadlock.
-    for (const table of [...MANAGED_TABLES, 'videos', 'migrations']) {
+    for (const table of [...MANAGED_TABLES, 'migrations']) {
       await dataSource.query(`DROP TABLE IF EXISTS "${table}" CASCADE`);
     }
 
@@ -58,10 +63,10 @@ describe('Database migrations (integration)', () => {
     }
   });
 
-  it('should apply all migrations and create all four tables', async () => {
+  it('should apply all migrations and create every managed table', async () => {
     const ranMigrations = await dataSource.runMigrations();
 
-    expect(ranMigrations).toHaveLength(2);
+    expect(ranMigrations).toHaveLength(ALL_MIGRATIONS.length);
 
     const result = await dataSource.query<{ table_name: string }[]>(
       `SELECT table_name FROM information_schema.tables
@@ -76,17 +81,18 @@ describe('Database migrations (integration)', () => {
       'refresh_tokens',
       'users',
       'verification_tokens',
+      'videos',
     ]);
   });
 
-  it('should revert the last migration and remove token tables', async () => {
+  it('should revert the last migration and remove the videos table', async () => {
     await dataSource.undoLastMigration();
 
     const result = await dataSource.query<{ table_name: string }[]>(
       `SELECT table_name FROM information_schema.tables
        WHERE table_schema = 'public'
          AND table_name = ANY($1::text[])`,
-      [['refresh_tokens', 'verification_tokens']],
+      [['videos']],
     );
     expect(result).toHaveLength(0);
   });

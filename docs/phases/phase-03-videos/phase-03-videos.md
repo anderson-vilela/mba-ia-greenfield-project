@@ -429,22 +429,26 @@ Entregar o backend de upload e processamento de vídeos da StreamTube: upload mu
 
 ---
 
-#### GET /videos/:id/stream (SI-03.11)
+#### GET /videos/:publicId/stream (SI-03.11)
+
+O path param é o `public_id` (11 chars base64url), não o uuid interno — é a URL pública da TD-08, na qual "the UUID PK stays internal".
 
 **Response 302:** redirect (`Location`) para uma presigned GET URL do bucket de vídeos, TTL curto configurável (phase-03-videos/TD-09, TD-12); o player consome a URL diretamente do storage, que responde `206 Partial Content` a requisições com `Range` — a API fica fora do caminho dos bytes.
 
 **Error responses:**
-- 404 VIDEO_NOT_FOUND: quando o `id` não existe
+- 404 VIDEO_NOT_FOUND: quando o `public_id` não existe
 - 409 VIDEO_NOT_READY: quando `status` não é `ready`
 
 ---
 
-#### GET /videos/:id/download (SI-03.12)
+#### GET /videos/:publicId/download (SI-03.12)
+
+O path param é o `public_id`, pelo mesmo motivo do endpoint de streaming.
 
 **Response 302:** redirect (`Location`) para uma presigned GET URL do bucket de vídeos com `response-content-disposition=attachment; filename="{title}"`, TTL próprio e independente do TTL de streaming (phase-03-videos/TD-10, TD-12).
 
 **Error responses:**
-- 404 VIDEO_NOT_FOUND: quando o `id` não existe
+- 404 VIDEO_NOT_FOUND: quando o `public_id` não existe
 - 409 VIDEO_NOT_READY: quando `status` não é `ready`
 
 ---

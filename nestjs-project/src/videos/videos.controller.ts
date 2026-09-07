@@ -139,12 +139,12 @@ export class VideosController {
   }
 
   @Public()
-  @Get(':id/stream')
+  @Get(':publicId/stream')
   @Redirect()
   @ApiOperation({
     summary: 'Stream a video',
     description:
-      'Redirects to a short-lived presigned URL in the object storage; the storage responds directly to Range requests.',
+      'Redirects to a short-lived presigned URL in the object storage; the storage responds directly to Range requests. Addressed by the public id, not the internal uuid.',
   })
   @ApiResponse({
     status: 302,
@@ -161,19 +161,19 @@ export class VideosController {
     schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
   })
   async stream(
-    @Param('id') id: string,
+    @Param('publicId') publicId: string,
   ): Promise<{ url: string; statusCode: number }> {
-    const url = await this.videosService.getStreamUrl(id);
+    const url = await this.videosService.getStreamUrl(publicId);
     return { url, statusCode: HttpStatus.FOUND };
   }
 
   @Public()
-  @Get(':id/download')
+  @Get(':publicId/download')
   @Redirect()
   @ApiOperation({
     summary: 'Download a video',
     description:
-      'Redirects to a short-lived presigned URL in the object storage with a content-disposition attachment header, on its own TTL independent of streaming.',
+      'Redirects to a short-lived presigned URL in the object storage with a content-disposition attachment header, on its own TTL independent of streaming. Addressed by the public id, not the internal uuid.',
   })
   @ApiResponse({
     status: 302,
@@ -190,9 +190,9 @@ export class VideosController {
     schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
   })
   async download(
-    @Param('id') id: string,
+    @Param('publicId') publicId: string,
   ): Promise<{ url: string; statusCode: number }> {
-    const url = await this.videosService.getDownloadUrl(id);
+    const url = await this.videosService.getDownloadUrl(publicId);
     return { url, statusCode: HttpStatus.FOUND };
   }
 }

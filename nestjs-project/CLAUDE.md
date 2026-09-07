@@ -174,8 +174,10 @@ The videos domain handles high-volume media upload, background processing, strea
 ### Key Endpoints (`/videos`)
 - `POST /videos`: Initiates a direct multipart upload. Creates a `draft` video record and returns S3 presigned URLs for upload parts.
 - `POST /videos/:id/complete-upload`: Completes multipart upload on storage, marks video as `processing`, and enqueues job in `video-processing`.
-- `GET /videos/:id/stream`: Returns HTTP 302 Found redirecting to a presigned S3 URL for streaming. Supports HTTP range requests directly via S3/MinIO.
-- `GET /videos/:id/download`: Returns HTTP 302 Found redirecting to a presigned S3 download URL with `Content-Disposition: attachment`.
+- `GET /videos/:publicId/stream`: Returns HTTP 302 Found redirecting to a presigned S3 URL for streaming. Supports HTTP range requests directly via S3/MinIO.
+- `GET /videos/:publicId/download`: Returns HTTP 302 Found redirecting to a presigned S3 download URL with `Content-Disposition: attachment`.
+
+The two public endpoints are addressed by `public_id` (11-char base64url), never by the row's uuid: per TD-08 the uuid primary key stays internal and `public_id` is the video's public URL. The authenticated upload endpoints still take the uuid, which the owner already holds from `POST /videos`.
 
 ### Background Worker & Queues
 - **Fila `video-processing`:** Consumed by `VideoProcessor` in the standalone `video-worker` container (`npm run start:worker`). Uses `ffprobe` to extract duration/metadata and `ffmpeg` to extract a thumbnail frame at 10% duration. On success, transitions video to `ready`. On failure, marks video as `failed` with `failure_reason`.

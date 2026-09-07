@@ -326,12 +326,12 @@ describe('Videos (e2e)', () => {
     });
   });
 
-  describe('GET /videos/:id/stream', () => {
+  describe('GET /videos/:publicId/stream', () => {
     it('redirects to a presigned URL when the video is ready', async () => {
       const video = await createVideoWithStatus('ready');
 
       const res = await request(app.getHttpServer())
-        .get(`/videos/${video.id}/stream`)
+        .get(`/videos/${video.public_id}/stream`)
         .redirects(0)
         .expect(302);
 
@@ -344,7 +344,7 @@ describe('Videos (e2e)', () => {
         const video = await createVideoWithStatus(status);
 
         const res = await request(app.getHttpServer())
-          .get(`/videos/${video.id}/stream`)
+          .get(`/videos/${video.public_id}/stream`)
           .redirects(0)
           .expect(409);
 
@@ -352,9 +352,9 @@ describe('Videos (e2e)', () => {
       },
     );
 
-    it('returns 404 for a nonexistent video id', async () => {
+    it('returns 404 for a nonexistent public id', async () => {
       const res = await request(app.getHttpServer())
-        .get(`/videos/${randomUUID()}/stream`)
+        .get(`/videos/${generateVideoPublicId()}/stream`)
         .redirects(0)
         .expect(404);
 
@@ -365,20 +365,31 @@ describe('Videos (e2e)', () => {
       const video = await createVideoWithStatus('ready');
 
       await request(app.getHttpServer())
-        .get(`/videos/${video.id}/stream`)
+        .get(`/videos/${video.public_id}/stream`)
         .redirects(0)
         .expect(302);
     });
+
+    it('does not resolve the internal uuid, only the public id', async () => {
+      const video = await createVideoWithStatus('ready');
+
+      const res = await request(app.getHttpServer())
+        .get(`/videos/${video.id}/stream`)
+        .redirects(0)
+        .expect(404);
+
+      expect(body(res).error).toBe('VIDEO_NOT_FOUND');
+    });
   });
 
-  describe('GET /videos/:id/download', () => {
+  describe('GET /videos/:publicId/download', () => {
     it('redirects to a presigned URL with an attachment content-disposition, on its own TTL', async () => {
       const video = await createVideoWithStatus('ready', {
         title: 'my-video.mp4',
       });
 
       const res = await request(app.getHttpServer())
-        .get(`/videos/${video.id}/download`)
+        .get(`/videos/${video.public_id}/download`)
         .redirects(0)
         .expect(302);
 
@@ -396,7 +407,7 @@ describe('Videos (e2e)', () => {
         const video = await createVideoWithStatus(status);
 
         const res = await request(app.getHttpServer())
-          .get(`/videos/${video.id}/download`)
+          .get(`/videos/${video.public_id}/download`)
           .redirects(0)
           .expect(409);
 
@@ -404,9 +415,9 @@ describe('Videos (e2e)', () => {
       },
     );
 
-    it('returns 404 for a nonexistent video id', async () => {
+    it('returns 404 for a nonexistent public id', async () => {
       const res = await request(app.getHttpServer())
-        .get(`/videos/${randomUUID()}/download`)
+        .get(`/videos/${generateVideoPublicId()}/download`)
         .redirects(0)
         .expect(404);
 
@@ -417,7 +428,7 @@ describe('Videos (e2e)', () => {
       const video = await createVideoWithStatus('ready');
 
       await request(app.getHttpServer())
-        .get(`/videos/${video.id}/download`)
+        .get(`/videos/${video.public_id}/download`)
         .redirects(0)
         .expect(302);
     });

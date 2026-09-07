@@ -157,8 +157,8 @@ export class VideosService {
     return { id: videoId, status: 'processing' };
   }
 
-  async getStreamUrl(videoId: string): Promise<string> {
-    const video = await this.videoRepository.findOneBy({ id: videoId });
+  async getStreamUrl(publicId: string): Promise<string> {
+    const video = await this.videoRepository.findOneBy({ public_id: publicId });
     if (!video) {
       throw new VideoNotFoundException();
     }
@@ -174,8 +174,8 @@ export class VideosService {
     });
   }
 
-  async getDownloadUrl(videoId: string): Promise<string> {
-    const video = await this.videoRepository.findOneBy({ id: videoId });
+  async getDownloadUrl(publicId: string): Promise<string> {
+    const video = await this.videoRepository.findOneBy({ public_id: publicId });
     if (!video) {
       throw new VideoNotFoundException();
     }
