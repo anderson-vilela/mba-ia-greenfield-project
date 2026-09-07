@@ -155,7 +155,11 @@ A TD-08 escolheu um `public_id` de 11 chars base64url como a URL pública do ví
 
 As duas rotas públicas passaram a resolver por `public_id` (`findOneBy({ public_id })`), com o path param renomeado para `:publicId`. Os endpoints autenticados de upload seguem no uuid, que o dono já recebe do `POST /videos`. Um e2e novo fixa a invariante da TD-08: o uuid interno em `/stream` responde 404. Plano (API Contracts) e `nestjs-project/CLAUDE.md` atualizados.
 
-### 5. Placeholders no plano
+### 5. Escopo dos metadados extraídos
+
+O `VideoProcessor` persiste apenas `duration_seconds`: é o único campo de metadado que o Data Model declara, e a TD-07 escolheu o toolchain (`ffprobe`/`ffmpeg` via `child_process`) sem prometer resolução, codec ou bitrate. Registrado aqui porque o enunciado fala em "duração/metadados": a extração dos demais atributos exigiria colunas novas, migration e processor fora do plano validado em `clean`, então fica para uma fase posterior em vez de ser somada a esta fora de escopo.
+
+### 6. Placeholders no plano
 
 Os cabeçalhos de API Contracts em `phase-03-videos.md` traziam o literal `(SI-NN.X)` do template do `/plan-build`; substituídos pelas SIs reais (03.6, 03.7, 03.11, 03.12).
 
