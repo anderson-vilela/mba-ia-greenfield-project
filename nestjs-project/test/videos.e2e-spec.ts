@@ -246,6 +246,29 @@ describe('Videos (e2e)', () => {
         })
         .expect(401);
     });
+
+    it.each([
+      '../../thumbnails/other/thumbnail.jpg',
+      '..\\..\\escaped.mp4',
+      'quote".mp4',
+    ])(
+      'rejects a filename that escapes the storage key prefix (%s)',
+      async (filename) => {
+        const { access_token } = await registerConfirmAndLogin(
+          `initiate-upload-${randomUUID()}@example.com`,
+        );
+
+        await request(app.getHttpServer())
+          .post('/videos')
+          .set('Authorization', `Bearer ${access_token}`)
+          .send({ filename, content_type: 'video/mp4', file_size: 1000 })
+          .expect(400);
+
+        await expect(
+          videoRepository.findOneBy({ title: filename }),
+        ).resolves.toBeNull();
+      },
+    );
   });
 
   describe('POST /videos/:id/complete-upload', () => {
