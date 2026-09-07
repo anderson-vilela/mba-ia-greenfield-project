@@ -296,18 +296,18 @@ Entregar o backend de upload e processamento de vídeos da StreamTube: upload mu
 
 ---
 
-### SI-03.11 — Endpoint GET /videos/:id/stream
+### SI-03.11 — Endpoint GET /videos/:publicId/stream
 
 **Description:** Endpoint de streaming que redireciona para uma URL assinada de leitura no bucket de vídeos.
 
-**Route:** GET /videos/:id/stream
+**Route:** GET /videos/:publicId/stream
 **Test Specs:** see `nestjs-project/specs/videos-stream.plan.md`
 **Authorization:** Public (anonymous)
 
 **Technical actions:**
 
 1. Implementar `VideosService.getStreamUrl(videoId)`: valida `status = 'ready'` e chama `StorageService.presignGetObject` no bucket de vídeos (`phase-03-videos/TD-09`)
-2. Adicionar `GET /videos/:id/stream` ao `VideosController`, respondendo `302` com `Location` per `## Technical Specifications → API Contracts`, com os decorators OpenAPI e marcado `@Public()`
+2. Adicionar `GET /videos/:publicId/stream` ao `VideosController`, respondendo `302` com `Location` per `## Technical Specifications → API Contracts`, com os decorators OpenAPI e marcado `@Public()`
 
 **Tests:**
 
@@ -319,25 +319,25 @@ Entregar o backend de upload e processamento de vídeos da StreamTube: upload mu
 
 **Acceptance criteria:**
 
-- `GET /videos/:id/stream` de um vídeo `ready` retorna `302` com `Location` apontando para o bucket de vídeos
-- `GET /videos/:id/stream` de um vídeo não `ready` retorna `409` com `error: "VIDEO_NOT_READY"`
-- `GET /videos/:id/stream` de um `id` inexistente retorna `404` com `error: "VIDEO_NOT_FOUND"`
+- `GET /videos/:publicId/stream` de um vídeo `ready` retorna `302` com `Location` apontando para o bucket de vídeos
+- `GET /videos/:publicId/stream` de um vídeo não `ready` retorna `409` com `error: "VIDEO_NOT_READY"`
+- `GET /videos/:publicId/stream` de um `public_id` inexistente retorna `404` com `error: "VIDEO_NOT_FOUND"`
 - O endpoint é acessível sem token de acesso (anônimo)
 
 ---
 
-### SI-03.12 — Endpoint GET /videos/:id/download
+### SI-03.12 — Endpoint GET /videos/:publicId/download
 
 **Description:** Endpoint de download com URL assinada própria e nome de arquivo derivado do título do vídeo.
 
-**Route:** GET /videos/:id/download
+**Route:** GET /videos/:publicId/download
 **Test Specs:** see `nestjs-project/specs/videos-download.plan.md`
 **Authorization:** Public (anonymous)
 
 **Technical actions:**
 
 1. Implementar `VideosService.getDownloadUrl(videoId)`: valida `status = 'ready'` e chama `StorageService.presignGetObject` com `response-content-disposition=attachment; filename="{title}"` e TTL próprio (`phase-03-videos/TD-10`)
-2. Adicionar `GET /videos/:id/download` ao `VideosController`, respondendo `302` com `Location` per `## Technical Specifications → API Contracts`, com os decorators OpenAPI e marcado `@Public()`
+2. Adicionar `GET /videos/:publicId/download` ao `VideosController`, respondendo `302` com `Location` per `## Technical Specifications → API Contracts`, com os decorators OpenAPI e marcado `@Public()`
 
 **Tests:**
 
@@ -349,9 +349,9 @@ Entregar o backend de upload e processamento de vídeos da StreamTube: upload mu
 
 **Acceptance criteria:**
 
-- `GET /videos/:id/download` de um vídeo `ready` retorna `302` com `Location` cujo TTL é independente do TTL do endpoint de streaming
-- `GET /videos/:id/download` de um vídeo não `ready` retorna `409` com `error: "VIDEO_NOT_READY"`
-- `GET /videos/:id/download` de um `id` inexistente retorna `404` com `error: "VIDEO_NOT_FOUND"`
+- `GET /videos/:publicId/download` de um vídeo `ready` retorna `302` com `Location` cujo TTL é independente do TTL do endpoint de streaming
+- `GET /videos/:publicId/download` de um vídeo não `ready` retorna `409` com `error: "VIDEO_NOT_READY"`
+- `GET /videos/:publicId/download` de um `public_id` inexistente retorna `404` com `error: "VIDEO_NOT_FOUND"`
 
 ---
 
@@ -467,8 +467,8 @@ O path param é o `public_id`, pelo mesmo motivo do endpoint de streaming.
 |----------|--------|----------------|-------|-------|
 | POST /videos | | ✓ | | Cria vídeo no canal do próprio usuário autenticado |
 | POST /videos/:id/complete-upload | | | ✓ | Só o dono do canal do vídeo pode concluir o upload (phase-03-videos/TD-03) |
-| GET /videos/:id/stream | ✓ | ✓ | | Anônimos podem assistir livremente (visão geral do projeto); regras de vídeo não-listado/privado chegam na Fase 05 (phase-03-videos/TD-09) |
-| GET /videos/:id/download | ✓ | ✓ | | Mesmo modelo de acesso do streaming (phase-03-videos/TD-10) |
+| GET /videos/:publicId/stream | ✓ | ✓ | | Anônimos podem assistir livremente (visão geral do projeto); regras de vídeo não-listado/privado chegam na Fase 05 (phase-03-videos/TD-09) |
+| GET /videos/:publicId/download | ✓ | ✓ | | Mesmo modelo de acesso do streaming (phase-03-videos/TD-10) |
 
 ---
 
@@ -481,7 +481,7 @@ O path param é o `public_id`, pelo mesmo motivo do endpoint de streaming.
 | VIDEO_NOT_FOUND | 404 | Video not found | `:id` inexistente em qualquer endpoint de vídeo |
 | VIDEO_ACCESS_DENIED | 403 | You do not own this video | POST /videos/:id/complete-upload para um vídeo cujo `channel_id` não é o do usuário autenticado (phase-03-videos/TD-03) |
 | VIDEO_UPLOAD_ALREADY_COMPLETED | 409 | Upload has already been completed for this video | POST /videos/:id/complete-upload chamado mais de uma vez, ou após a varredura de uploads abandonados já ter marcado o vídeo como `failed` (phase-03-videos/TD-03, TD-11) |
-| VIDEO_NOT_READY | 409 | Video is not ready for playback | GET /videos/:id/stream ou /videos/:id/download enquanto `status` é `draft`, `processing` ou `failed` (phase-03-videos/TD-09, TD-10, TD-11) |
+| VIDEO_NOT_READY | 409 | Video is not ready for playback | GET /videos/:publicId/stream ou /videos/:publicId/download enquanto `status` é `draft`, `processing` ou `failed` (phase-03-videos/TD-09, TD-10, TD-11) |
 | UPLOAD_FILE_TOO_LARGE | 413 | File exceeds the maximum upload size | POST /videos com `file_size` acima do máximo configurado (phase-03-videos/TD-12) |
 | UNSUPPORTED_MEDIA_TYPE | 415 | Unsupported video format | POST /videos com `content_type` fora da lista de MIME types aceitos (phase-03-videos/TD-12) |
 
@@ -557,8 +557,8 @@ Ordem linearizada: SI-03.1 → SI-03.2, SI-03.3, SI-03.4, SI-03.5 (paralelo) →
 - [x] SI-03.8 — Sweep de uploads abandonados
 - [x] SI-03.9 — Video worker: bootstrap standalone
 - [x] SI-03.10 — `VideoProcessor`: metadados e thumbnail via ffmpeg/ffprobe
-- [x] SI-03.11 — Endpoint GET /videos/:id/stream
-- [x] SI-03.12 — Endpoint GET /videos/:id/download
+- [x] SI-03.11 — Endpoint GET /videos/:publicId/stream
+- [x] SI-03.12 — Endpoint GET /videos/:publicId/download
 
 **Full test suites:**
 

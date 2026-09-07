@@ -111,4 +111,4 @@ If the documentation returned does not match the installed version, flag the dis
 - **Upload Strategy:** Direct S3 multipart upload via presigned URLs up to 10GB. The API coordinates uploads without buffering video bytes.
 - **Worker & Processing:** Standalone process (`video-worker`) consuming the BullMQ `video-processing` queue backed by Valkey. Uses `ffprobe` for metadata and `ffmpeg` for thumbnail generation at 10% duration.
 - **Unique URL:** 11-character base64url random unique `public_id` per video.
-- **Delivery:** Streaming (`GET /videos/:id/stream`) and download (`GET /videos/:id/download`) via HTTP 302 redirect to short-lived S3 presigned URLs.
+- **Delivery:** Streaming (`GET /videos/:publicId/stream`) and download (`GET /videos/:publicId/download`) via HTTP 302 redirect to short-lived S3 presigned URLs.

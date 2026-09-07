@@ -102,23 +102,23 @@
   - O integration-spec do `VideoProcessor` roda ffmpeg/ffprobe de verdade (sem mocks) contra um vídeo sintético gerado no próprio teste via `ffmpeg -f lavfi -i testsrc=...` (evita commitar um fixture binário). Isso exigiu instalar `ffmpeg` também em `Dockerfile.dev` (imagem do `nestjs-api`, onde os testes rodam) — até então só a imagem do `video-worker` tinha o pacote (Action 5 falava só da imagem do worker); sem isso o teste não roda onde a suíte de fato executa. Rebuild da imagem `nestjs-api` feito (`docker compose up -d --build nestjs-api`).
   - Mesma situação já registrada na SI-03.7: a chave da thumbnail é sempre `{id}/thumbnail.jpg` (não usa o prefixo de teste `STORAGE_TEST_KEY_PREFIX`), então o integration-spec limpa esse objeto manualmente no `afterEach` (`DeleteObjectCommand` direto), fora do mecanismo padrão `clearTestStorageObjects()` (que só cobre chaves prefixadas).
 
-### SI-03.11 — Endpoint GET /videos/:id/stream
+### SI-03.11 — Endpoint GET /videos/:publicId/stream
 - **Status:** completed
 - **Tests:** 23 passing (13 unit + 10 e2e)
 - **Observations:**
   - Nenhum controller do projeto usava `@Redirect`/`res.redirect` antes desta SI (confirmado via Explore); implementado com o decorator `@Redirect()` sem argumentos e o handler retornando `{ url, statusCode: HttpStatus.FOUND }` — é o padrão idiomático do NestJS para redirects com URL dinâmica (a assinatura da URL muda por request).
   - Criada `VideoNotReadyException` (409, `VIDEO_NOT_READY`) em `videos.exceptions.ts`, seguindo o mesmo padrão das exceptions já existentes no módulo (subclasse de `DomainException`, sem parâmetros no construtor).
   - `VideosService.getStreamUrl` reusa `presignedStreamUrlTtlSeconds` de `storage.config.ts`, que já existia desde a SI-03.1 mas não tinha nenhum consumidor até agora.
-  - Spec-derived E2E (`nestjs-project/specs/videos-stream.plan.md`): os 4 cenários foram adicionados como um novo bloco `describe('GET /videos/:id/stream', ...)` no arquivo já existente `test/videos.e2e-spec.ts` (mesmo `target_file:` de SI-03.6/03.7/03.12), seguindo o padrão observado de acumular describes por endpoint no mesmo arquivo. Criado o helper `createVideoWithStatus` (registra+confirma+loga um usuário novo, localiza o canal automático via `ChannelsService.findByUserId`, e insere o `Video` diretamente via repositório com o `status` desejado) para bypassar o pipeline de upload/processamento real.
+  - Spec-derived E2E (`nestjs-project/specs/videos-stream.plan.md`): os 4 cenários foram adicionados como um novo bloco `describe('GET /videos/:publicId/stream', ...)` no arquivo já existente `test/videos.e2e-spec.ts` (mesmo `target_file:` de SI-03.6/03.7/03.12), seguindo o padrão observado de acumular describes por endpoint no mesmo arquivo. Criado o helper `createVideoWithStatus` (registra+confirma+loga um usuário novo, localiza o canal automático via `ChannelsService.findByUserId`, e insere o `Video` diretamente via repositório com o `status` desejado) para bypassar o pipeline de upload/processamento real.
   - Os testes e2e usam `.redirects(0)` no supertest para inspecionar o `302` e o header `Location` sem seguir o redirect real até o MinIO (o objeto do vídeo não existe de fato, já que o `Video` é inserido diretamente no banco).
 
-### SI-03.12 — Endpoint GET /videos/:id/download
+### SI-03.12 — Endpoint GET /videos/:publicId/download
 - **Status:** completed
 - **Tests:** 34 passing (18 unit + 16 e2e — arquivos inteiros `videos.service.spec.ts` e `videos.e2e-spec.ts`, incluindo describes de SIs anteriores)
 - **Observations:**
   - `StorageService.presignGetObject` já suportava `responseContentDisposition` desde a SI-03.5 e `storage.config.ts` já tinha `presignedDownloadUrlTtlSeconds` desde a SI-03.1 — nenhuma mudança de config/storage foi necessária, só o consumo em `VideosService.getDownloadUrl`.
   - Reusada `VideoNotReadyException` (409, `VIDEO_NOT_READY`) já criada na SI-03.11 — o Error Catalog trata o mesmo código para stream e download.
-  - Spec-derived E2E (`nestjs-project/specs/videos-download.plan.md`): os 4 cenários (na verdade 4 `it`s cobrindo os 3 grupos do spec — o grupo 4.1 gerou 1 teste, mas adicionei também "sem token de acesso" espelhando o padrão do describe de stream, cobrindo a Authorization Matrix "Public/Authenticated") foram adicionados como novo `describe('GET /videos/:id/download', ...)` no arquivo acumulado `test/videos.e2e-spec.ts`, seguindo o padrão da SI-03.11.
+  - Spec-derived E2E (`nestjs-project/specs/videos-download.plan.md`): os 4 cenários (na verdade 4 `it`s cobrindo os 3 grupos do spec — o grupo 4.1 gerou 1 teste, mas adicionei também "sem token de acesso" espelhando o padrão do describe de stream, cobrindo a Authorization Matrix "Public/Authenticated") foram adicionados como novo `describe('GET /videos/:publicId/download', ...)` no arquivo acumulado `test/videos.e2e-spec.ts`, seguindo o padrão da SI-03.11.
   - **Bug pré-existente descoberto e corrigido (fora do escopo estrito desta SI, mas bloqueava os próprios testes dela):** `test/videos.e2e-spec.ts` nunca limpava o `ThrottlerStorage` entre testes (diferente de `test/auth.e2e-spec.ts`, que já fazia isso desde a fase 02). Como o arquivo acumula describes entre SIs (03.7, 03.11, 03.12) e cada um registra novos usuários via `/auth/register`, o volume total de chamadas ao longo do arquivo estourava o rate limit do `ThrottlerGuard` global só a partir do describe de download (último do arquivo) — os registros retornavam 429 silenciosamente, o token de confirmação capturado ficava vazio e o `findOneByOrFail` subsequente por email falhava com `EntityNotFoundError`. Corrigido adicionando `throttlerStorage.storage.clear()` no `beforeEach` compartilhado, replicando o padrão já existente em `test/auth.e2e-spec.ts`. Sinalizando para o usuário: é uma correção em infraestrutura de teste compartilhada (não em lógica de negócio de SIs anteriores), necessária para os testes desta própria SI passarem de forma confiável.
 
 ---
@@ -161,7 +161,7 @@ Os cabeçalhos de API Contracts em `phase-03-videos.md` traziam o literal `(SI-N
 
 ### Definition of Done (verificada na stack completa do Compose)
 
-Medida em dois ciclos consecutivos de `npm test` → `npm run test:e2e` **sem restaurar o banco entre eles**, justamente o cenário que expunha o defeito 3:
+Medida em ciclos consecutivos de `npm test` → `npm run test:e2e` **sem restaurar o banco entre eles** e com o container sem nenhuma outra execução concorrente — justamente o cenário que expunha o defeito 3:
 
 | Verificação | Resultado |
 |---|---|
