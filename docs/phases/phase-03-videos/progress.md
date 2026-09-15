@@ -75,7 +75,7 @@
   - `library-refs.md` (`@nestjs/bullmq`) é explícito: "usar no módulo da API para registrar a fila, e no worker (contexto Nest standalone) para o processor". Como SI-03.8 não depende de SI-03.9 (bootstrap do worker ainda não existe) e `VideosModule` é importado pelo `AppModule` da API, registrar `AbandonedUploadSweepProcessor` (que estende `WorkerHost`) como provider de `VideosModule` ativaria um consumer BullMQ dentro do próprio processo da API — contrariando o objetivo da fase de isolar o processamento no video-worker. Por isso o processor foi criado como classe solta (não registrada em nenhum `@Module` ainda) e só a Action 3 (registro do job repetível, que é só produtor) foi implementada como provider real (`AbandonedUploadSweepScheduler`) em `VideosModule`. A ligação do processor ao processo do worker ficou pendente ao fim da SI-03.8 — nem SI-03.9 nem SI-03.10 mencionam esse wiring explicitamente nas Technical actions. **Lacuna fechada no fechamento da fase** (ver "Fechamento da fase" ao final deste documento).
   - Fila dedicada `sweep-abandoned-uploads` (mesmo nome do evento) criada em `QueueModule` via `BullModule.registerQueue`, sem `defaultJobOptions` (semântica "best-effort": uma falha não teria retry automático, a próxima execução periódica reprocessa o vídeo).
   - Intervalo do sweep não estava fixado por nenhuma TD; adicionado `QUEUE_SWEEP_ABANDONED_UPLOADS_INTERVAL_MS` (default `3600000` = 1h) em `queue.config.ts`/`env.validation.ts`/`.env.example`, seguindo o padrão de defaults sem TD já usado na SI-03.1.
-  - `AbandonedUploadSweepScheduler.onModuleInit` usa `jobId` fixo no `queue.add(..., { repeat, jobId })`: BullMQ deduplica repeatable jobs pelo par nome+padrão de repetição, então reiniciar a API não cria jobs repetidos — não há teste automatizado para essa idempotência de registro (fora da Tests table desta SI, que só cobre o `AbandonedUploadSweepProcessor`); validado por leitura da documentação do BullMQ, não por execução real.
+  - `AbandonedUploadSweepScheduler.onModuleInit` usa `queue.upsertJobScheduler(SWEEP_ABANDONED_UPLOADS_JOB, { every }, ...)`: o scheduler é identificado pelo próprio nome, então reiniciar a API atualiza o agendamento existente em vez de criar um segundo — não há teste automatizado para essa idempotência de registro (fora da Tests table desta SI, que só cobre o `AbandonedUploadSweepProcessor`); validado por leitura da documentação do BullMQ, não por execução real.
   - AC #3 (rodar o sweep duas vezes não repete o abort) é satisfeita pela própria query de seleção (`status = 'draft'`): um vídeo já `failed` não é mais retornado pelo `find`, então a segunda chamada de `process()` nunca tenta abortar de novo — não foi necessário um guard extra de estado dentro do loop.
 
 ### SI-03.9 — Video worker: bootstrap standalone
@@ -169,13 +169,35 @@ Corrigido na entrada, em `CreateVideoDto`: o `filename` rejeita separadores de p
 
 Os cabeçalhos de API Contracts em `phase-03-videos.md` traziam o literal `(SI-NN.X)` do template do `/plan-build`; substituídos pelas SIs reais (03.6, 03.7, 03.11, 03.12).
 
+### 8. `npm test` verde sem flag extra
+
+A DoD do enunciado nomeia `npm test`, mas o script era `"test": "jest"` — sem `--runInBand`. Rodado assim, o comando falhava de forma não-determinística (execuções seguidas deram 18 e 10 testes vermelhos), sempre por contaminação cruzada entre as suites `*.integration-spec.ts`, que compartilham um único banco. Nenhum teste falhava por lógica: serializado, o mesmo conjunto fecha 210/210.
+
+O defeito é herdado (a `dev` já trazia o script assim, e o `nestjs-project/CLAUDE.md` base já mandava chamar `npm test -- --runInBand`), mas a Fase 03 somou 6 suites de integração às 11 existentes e ampliou a janela de colisão. Corrigido na origem: `--runInBand` passou para dentro dos scripts `test` e `test:watch`, e a seção "Test execution" do `nestjs-project/CLAUDE.md` deixou de instruir a flag manual. Assim o comando literal do critério de aceite é o comando correto.
+
+### 9. TD-13 implementada como decidida (isolamento da fila)
+
+A TD-13 decidiu a **Opção A** (namespaces de teste dedicados) e rejeitou explicitamente a **Opção C** (compartilhar os recursos de dev) pelo risco de "a dev worker silently eating a test job". O storage seguiu a Opção A (`STORAGE_TEST_KEY_PREFIX`), mas a fila ficou na Opção C: `src/test/queue.ts` operava a fila `video-processing` de desenvolvimento e chamava `obliterate({ force: true })` nela. O risco previsto se materializou — `docker compose logs video-worker` acumulava erros `Missing key for job N. moveToDelayed`, do worker de dev processando jobs de teste que a suíte apagava debaixo dele.
+
+Corrigido com o "test queue prefix, supplied via env" que a própria Opção A previa: `QUEUE_PREFIX` (default `bull`) entrou em `queue.config.ts`, no schema Joi, no `.env`/`.env.example` e nas opções do `BullModule.forRootAsync`; `src/test/jest-env-setup.ts`, registrado em `setupFiles` dos dois configs do Jest, força `bull-test` durante os testes. Verificado no Valkey: as chaves da suíte ficam em `bull-test:*` e `bull:video-processing` permanece intocada.
+
+### 10. TD-12: a metade "verify" que faltava
+
+A TD-12 decidiu **declare-then-verify**: o cliente declara `file_size` antes de a URL ser assinada e, depois da conclusão, a API confere o objeto real com `HeadObject`, falhando o vídeo "if reality contradicts the declaration". Só o "declare" existia — `initiateUpload` validava a declaração, e nenhum `HeadObject` era feito em lugar nenhum do código de produção. Como os bytes vão direto para o storage, um cliente que declarasse 1 MB podia enviar um arquivo de qualquer tamanho sem que o teto de 10 GB fosse aplicado.
+
+`StorageService.getObjectSize` (via `HeadObjectCommand`) foi adicionado e `completeUpload` agora verifica o tamanho real contra `UPLOAD_MAX_FILE_SIZE_BYTES` antes de transicionar para `processing`. Acima do limite, o vídeo vai para `failed` com `failure_reason` e a requisição é rejeitada — o estado terminal que a TD-11 já previa para o caminho de erro. A verificação é contra o teto configurado, não contra o valor declarado byte a byte: comparar com a declaração exigiria persisti-la em coluna nova, ou seja, migration e Data Model fora do plano fechado em `clean`.
+
+### 11. Streaming parcial sem cobertura
+
+Os e2e de `GET /videos/:publicId/stream` paravam no 302 (`.redirects(0)`) e conferiam o formato da URL assinada. O comportamento que a capacidade promete — "reprodução sem exigir o download completo" — acontece depois do redirect, no storage, e não estava exercitado: nada no repositório provava que um `Range` era respondido com `206 Partial Content`. Adicionado um e2e que sobe um objeto real pelo fluxo de multipart, segue o redirect e pede `bytes=0-3`, asserindo `206`, `content-range: bytes 0-3/16` e o conteúdo do trecho.
+
 ### Definition of Done (verificada na stack completa do Compose)
 
 Medida em ciclos consecutivos de `npm test` → `npm run test:e2e` **sem restaurar o banco entre eles** e com o container sem nenhuma outra execução concorrente — justamente o cenário que expunha o defeito 3:
 
 | Verificação | Resultado |
 |---|---|
-| `npm test -- --runInBand` (unit + integração) | 37 suites, 210 testes passando |
-| `npm run test:e2e` | 4 suites, 76 testes passando |
+| `npm test` (unit + integração) | 37 suites, 215 testes passando |
+| `npm run test:e2e` | 4 suites, 77 testes passando |
 | `npx tsc --noEmit` | exit 0 |
 | `npm run lint` | exit 0 (0 errors, 26 warnings `no-unsafe-argument` pré-existentes) |
