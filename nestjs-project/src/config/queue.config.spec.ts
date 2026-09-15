@@ -3,10 +3,13 @@ import { Test } from '@nestjs/testing';
 import queueConfig from './queue.config';
 
 const loadConfig = async (
-  env: Partial<Record<'QUEUE_HOST' | 'QUEUE_PORT', string>> = {},
+  env: Partial<
+    Record<'QUEUE_HOST' | 'QUEUE_PORT' | 'QUEUE_PREFIX', string>
+  > = {},
 ): Promise<ConfigType<typeof queueConfig>> => {
   delete process.env.QUEUE_HOST;
   delete process.env.QUEUE_PORT;
+  delete process.env.QUEUE_PREFIX;
   Object.assign(process.env, env);
 
   const module = await Test.createTestingModule({
@@ -24,6 +27,7 @@ describe('queueConfig', () => {
   afterEach(() => {
     delete process.env.QUEUE_HOST;
     delete process.env.QUEUE_PORT;
+    delete process.env.QUEUE_PREFIX;
   });
 
   it('should default host to valkey and port to 6379', async () => {
@@ -39,5 +43,15 @@ describe('queueConfig', () => {
     });
     expect(config.host).toBe('custom-queue-host');
     expect(config.port).toBe(7000);
+  });
+
+  it("should default the BullMQ key prefix to 'bull'", async () => {
+    const config = await loadConfig();
+    expect(config.prefix).toBe('bull');
+  });
+
+  it('should read the BullMQ key prefix from the environment', async () => {
+    const config = await loadConfig({ QUEUE_PREFIX: 'bull-test' });
+    expect(config.prefix).toBe('bull-test');
   });
 });

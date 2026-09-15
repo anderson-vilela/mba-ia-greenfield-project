@@ -23,6 +23,7 @@ export const envValidationSchema = Joi.object({
   SWAGGER_ENABLED: Joi.string().valid('true', 'false').default('false'),
   QUEUE_HOST: Joi.string().default('valkey'),
   QUEUE_PORT: Joi.number().default(6379),
+  QUEUE_PREFIX: Joi.string().default('bull'),
   QUEUE_SWEEP_ABANDONED_UPLOADS_INTERVAL_MS: Joi.number().default(3600000),
   STORAGE_ENDPOINT: Joi.string().uri().default('http://storage:9000'),
   STORAGE_REGION: Joi.string().default('us-east-1'),
@@ -39,5 +40,4 @@ export const envValidationSchema = Joi.object({
     'video/mp4,video/webm,video/quicktime',
   ),
   STORAGE_MULTIPART_PART_SIZE_BYTES: Joi.number().default(104857600),
-  STORAGE_TEST_KEY_PREFIX: Joi.string().default('test/'),
 });

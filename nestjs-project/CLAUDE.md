@@ -70,7 +70,7 @@ npm run start:worker                     # Standalone video worker (runs in vide
 npm run build                            # Compile to dist/
 npm run start:prod                       # Run compiled build
 
-npm test                                 # Unit tests
+npm test                                 # Unit + integration tests (serial)
 npm run test:watch                       # Unit tests in watch mode
 npm run test:cov                         # Coverage report
 npm run test:e2e                         # End-to-end tests (always with --runInBand)
@@ -91,14 +91,16 @@ curl http://localhost:3000
 
 ### Test execution
 
-Integration and e2e suites share a single test database. They **must** be run with `--runInBand`:
+Integration and e2e suites share a single test database, so they **must** run serially. Both scripts already carry `--runInBand` — run them plain:
 
 ```bash
-docker compose exec nestjs-api npm test -- --runInBand
-docker compose exec nestjs-api npm run test:e2e   # already configured
+docker compose exec nestjs-api npm test
+docker compose exec nestjs-api npm run test:e2e
 ```
 
-Parallel execution causes FK violations, deadlocks, and cross-suite contamination because suites truncate or seed shared tables concurrently.
+Parallel execution causes FK violations, deadlocks, and cross-suite contamination because suites truncate or seed shared tables concurrently. Never remove `--runInBand` from the `test` script to "speed up CI": the failures it produces are non-deterministic and look like product bugs.
+
+The suites also share the dev Valkey and MinIO. They are isolated by namespace, not by separate services: `src/test/jest-env-setup.ts` (a `setupFiles` entry in both Jest configs) forces `QUEUE_PREFIX=bull-test`, so BullMQ keys written by tests are invisible to the `video-worker` container, and `STORAGE_TEST_KEY_PREFIX` keeps test objects under their own key prefix in the buckets.
 
 During active development, run only the tests related to the file being changed (`npm test -- path/to/file.spec.ts`). Before declaring a task done, run the full suite — see the global `CLAUDE.md` → "Definition of Done (Technical)".
 
@@ -126,7 +128,7 @@ Conventions for **how to write** each kind of test (mocking patterns, AAA struct
 
 These settings are required in `package.json` (jest config) and `test/jest-e2e.json` for the project's tests to work correctly:
 
-- `setupFiles: ["dotenv/config"]` — without this, `.env` is not loaded inside the Jest process. `DB_HOST`, `JWT_SECRET`, etc. fall back to undefined or to the host's `localhost`, breaking container-to-container DNS.
+- `setupFiles: ["dotenv/config", "<the jest-env-setup path>"]` — without `dotenv/config`, `.env` is not loaded inside the Jest process: `DB_HOST`, `JWT_SECRET`, etc. fall back to undefined or to the host's `localhost`, breaking container-to-container DNS. `src/test/jest-env-setup.ts` must come **after** it, since it overrides the dev values `.env` supplies (currently `QUEUE_PREFIX`). The path differs per config because the `rootDir`s differ: `<rootDir>/test/jest-env-setup.ts` in `package.json` (rootDir `src`) and `<rootDir>/../src/test/jest-env-setup.ts` in `test/jest-e2e.json`.
 - `testRegex: '.*\\.(spec|integration-spec)\\.ts$'` — covers both unit (`*.spec.ts`) and integration (`*.integration-spec.ts`) suffixes.
 
 Do not add new test-file suffixes; if a new test type is needed, update the regex deliberately.

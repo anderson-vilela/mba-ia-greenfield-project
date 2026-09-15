@@ -14,8 +14,8 @@
     "start:prod": "node dist/main",
     "start:worker": "ts-node src/worker/main.ts",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
-    "test": "jest",
-    "test:watch": "jest --watch",
+    "test": "jest --runInBand",
+    "test:watch": "jest --watch --runInBand",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:integration": "jest --runInBand --testRegex=\"\\.integration-spec\\.ts$\"",
@@ -98,7 +98,8 @@
     "coverageDirectory": "../coverage",
     "testEnvironment": "node",
     "setupFiles": [
-      "dotenv/config"
+      "dotenv/config",
+      "<rootDir>/test/jest-env-setup.ts"
     ]
   }
 }

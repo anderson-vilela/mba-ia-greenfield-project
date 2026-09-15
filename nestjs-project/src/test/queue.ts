@@ -12,6 +12,9 @@ function createQueueConnection() {
 export async function clearVideoProcessingQueue(): Promise<void> {
   const queue = new Queue(VIDEO_PROCESSING_QUEUE, {
     connection: createQueueConnection(),
+    // Must match the prefix the app under test uses, so the suite only ever
+    // obliterates its own namespace — never the dev worker's queue (TD-13).
+    prefix: process.env.QUEUE_PREFIX ?? 'bull',
   });
   try {
     await queue.obliterate({ force: true });

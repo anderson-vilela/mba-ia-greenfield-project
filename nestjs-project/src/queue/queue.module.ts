@@ -13,6 +13,7 @@ import {
       inject: [queueConfig.KEY],
       useFactory: (config: ConfigType<typeof queueConfig>) => ({
         connection: { host: config.host, port: config.port },
+        prefix: config.prefix,
       }),
     }),
     BullModule.registerQueue({
