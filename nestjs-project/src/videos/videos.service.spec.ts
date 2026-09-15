@@ -84,6 +84,7 @@ describe('VideosService', () => {
       | 'createMultipartUpload'
       | 'presignUploadParts'
       | 'completeMultipartUpload'
+      | 'getObjectSize'
       | 'presignGetObject'
     >
   >;
@@ -115,6 +116,7 @@ describe('VideosService', () => {
           'https://signed/3',
         ]),
       completeMultipartUpload: jest.fn().mockResolvedValue(undefined),
+      getObjectSize: jest.fn().mockResolvedValue(250),
       presignGetObject: jest
         .fn()
         .mockResolvedValue('https://signed/stream-url'),
@@ -258,6 +260,27 @@ describe('VideosService', () => {
         videoId: 'video-id',
       });
       expect(result).toEqual({ id: 'video-id', status: 'processing' });
+    });
+
+    it('fails the video when the stored object is larger than the configured limit (declared size was a lie)', async () => {
+      videoRepository.findOneBy.mockResolvedValue(makeVideo());
+      channelsService.findByUserId.mockResolvedValue(makeChannel());
+      storageService.getObjectSize.mockResolvedValue(5000);
+
+      await expect(
+        service.completeUpload('video-id', 'user-id', makeCompleteUploadDto()),
+      ).rejects.toBeInstanceOf(UploadFileTooLargeException);
+
+      expect(videoRepository.update).toHaveBeenCalledWith(
+        { id: 'video-id', status: 'draft' },
+        {
+          status: 'failed',
+          failure_reason:
+            'Uploaded file is 5000 bytes, above the 1000 bytes limit',
+          upload_id: null,
+        },
+      );
+      expect(videoProcessingQueue.add).not.toHaveBeenCalled();
     });
   });
 

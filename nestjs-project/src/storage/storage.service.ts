@@ -5,6 +5,7 @@ import {
   CompleteMultipartUploadCommand,
   CreateMultipartUploadCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
   UploadPartCommand,
@@ -148,6 +149,19 @@ export class StorageService {
         ContentType: contentType,
       }),
     );
+  }
+
+  /**
+   * Real size of a stored object, in bytes. The client declares the size before
+   * the upload is signed, but the bytes never pass through the API — this is how
+   * the declaration gets verified after the fact (TD-12).
+   */
+  async getObjectSize(bucket: string, key: string): Promise<number> {
+    const result = await this.s3.send(
+      new HeadObjectCommand({ Bucket: bucket, Key: key }),
+    );
+
+    return result.ContentLength ?? 0;
   }
 
   async presignGetObject(

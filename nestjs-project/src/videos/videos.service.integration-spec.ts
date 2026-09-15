@@ -32,6 +32,7 @@ function makeStorageService(): jest.Mocked<
     | 'createMultipartUpload'
     | 'presignUploadParts'
     | 'completeMultipartUpload'
+    | 'getObjectSize'
   >
 > {
   return {
@@ -39,6 +40,7 @@ function makeStorageService(): jest.Mocked<
     createMultipartUpload: jest.fn().mockResolvedValue('upload-123'),
     presignUploadParts: jest.fn().mockResolvedValue(['https://signed/1']),
     completeMultipartUpload: jest.fn().mockResolvedValue(undefined),
+    getObjectSize: jest.fn().mockResolvedValue(250),
   };
 }
 

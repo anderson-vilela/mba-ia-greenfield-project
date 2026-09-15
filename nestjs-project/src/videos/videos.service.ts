@@ -144,6 +144,25 @@ export class VideosService {
       })),
     );
 
+    // TD-12 (declare-then-verify): `file_size` was only a claim when the upload
+    // was signed. Now that the object exists, check what was actually written —
+    // a client that under-declares must not slip past the configured ceiling.
+    const uploadedSizeBytes = await this.storageService.getObjectSize(
+      bucket,
+      video.original_key,
+    );
+    if (uploadedSizeBytes > this.config.maxUploadSizeBytes) {
+      await this.videoRepository.update(
+        { id: videoId, status: 'draft' },
+        {
+          status: 'failed',
+          failure_reason: `Uploaded file is ${uploadedSizeBytes} bytes, above the ${this.config.maxUploadSizeBytes} bytes limit`,
+          upload_id: null,
+        },
+      );
+      throw new UploadFileTooLargeException();
+    }
+
     const updateResult = await this.videoRepository.update(
       { id: videoId, status: 'draft' },
       { status: 'processing', upload_id: null },

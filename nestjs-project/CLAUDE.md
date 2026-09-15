@@ -175,7 +175,7 @@ The videos domain handles high-volume media upload, background processing, strea
 
 ### Key Endpoints (`/videos`)
 - `POST /videos`: Initiates a direct multipart upload. Creates a `draft` video record and returns S3 presigned URLs for upload parts.
-- `POST /videos/:id/complete-upload`: Completes multipart upload on storage, marks video as `processing`, and enqueues job in `video-processing`.
+- `POST /videos/:id/complete-upload`: Completes multipart upload on storage, verifies the object's real size against `UPLOAD_MAX_FILE_SIZE_BYTES` (`HeadObject`), marks video as `processing`, and enqueues job in `video-processing`. A file that exceeds the limit despite a smaller declared `file_size` is marked `failed` with a `failure_reason` and rejected — the declaration made at `POST /videos` is never trusted on its own (TD-12).
 - `GET /videos/:publicId/stream`: Returns HTTP 302 Found redirecting to a presigned S3 URL for streaming. Supports HTTP range requests directly via S3/MinIO.
 - `GET /videos/:publicId/download`: Returns HTTP 302 Found redirecting to a presigned S3 download URL with `Content-Disposition: attachment`.
 

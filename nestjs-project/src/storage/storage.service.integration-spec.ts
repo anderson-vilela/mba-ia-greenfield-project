@@ -100,6 +100,20 @@ describe('StorageService (integration)', () => {
     ).rejects.toThrow();
   });
 
+  it('reports the real byte size of a stored object', async () => {
+    const key = testKey('size.mp4');
+    const body = Buffer.alloc(2048, 'b');
+    await service.putObject(bucket, key, body, 'video/mp4');
+
+    await expect(service.getObjectSize(bucket, key)).resolves.toBe(body.length);
+  });
+
+  it('rejects when asked for the size of an object that does not exist', async () => {
+    await expect(
+      service.getObjectSize(bucket, testKey('missing.mp4')),
+    ).rejects.toThrow();
+  });
+
   it('generates a presigned GET url with the requested ttl against the real storage endpoint', async () => {
     const key = testKey('get.mp4');
     const url = await service.presignGetObject(bucket, key, {
