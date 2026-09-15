@@ -361,6 +361,37 @@ describe('Videos (e2e)', () => {
       expect(res.headers.location).toContain('streamtube-videos');
     });
 
+    // The API only signs the URL; the range request is answered by the storage.
+    // Following the redirect end to end is what proves a player can pull one
+    // slice of the file instead of downloading it whole (TD-09).
+    it('serves a partial range from the presigned URL instead of the whole file', async () => {
+      const { access_token } = await registerConfirmAndLogin(
+        `stream-range-${randomUUID()}@example.com`,
+      );
+      const { id, part } = await initiateDraftUpload(access_token);
+      const etag = await completePart(part.url);
+      await request(app.getHttpServer())
+        .post(`/videos/${id}/complete-upload`)
+        .set('Authorization', `Bearer ${access_token}`)
+        .send({ parts: [{ part_number: part.part_number, etag }] })
+        .expect(202);
+      await videoRepository.update({ id }, { status: 'ready' });
+      const video = await videoRepository.findOneByOrFail({ id });
+
+      const redirect = await request(app.getHttpServer())
+        .get(`/videos/${video.public_id}/stream`)
+        .redirects(0)
+        .expect(302);
+
+      const ranged = await fetch(redirect.headers.location, {
+        headers: { Range: 'bytes=0-3' },
+      });
+
+      expect(ranged.status).toBe(206);
+      expect(ranged.headers.get('content-range')).toBe('bytes 0-3/16');
+      await expect(ranged.text()).resolves.toBe('fake');
+    }, 30000);
+
     it.each(['draft', 'processing', 'failed'] as const)(
       'rejects a video that is not ready (status: %s)',
       async (status) => {
